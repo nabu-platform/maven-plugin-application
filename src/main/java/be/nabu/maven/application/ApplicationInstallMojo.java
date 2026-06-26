@@ -20,6 +20,8 @@ import java.util.zip.ZipInputStream;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DefaultArtifact;
+import org.apache.maven.artifact.handler.ArtifactHandler;
+import org.apache.maven.artifact.handler.manager.ArtifactHandlerManager;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -47,6 +49,9 @@ public class ApplicationInstallMojo extends AbstractMojo {
 
 	@Component
 	private ArtifactResolver artifactResolver;
+
+	@Component
+	private ArtifactHandlerManager artifactHandlerManager;
 
 	@Parameter(defaultValue = "${session}", readonly = true, required = true)
 	private MavenSession session;
@@ -116,7 +121,11 @@ public class ApplicationInstallMojo extends AbstractMojo {
 		String artifactId = parts[1];
 		String type = parts[2];
 		String version = parts.length == 4 ? parts[3] : findManagedVersion(groupId, artifactId, type);
-		Artifact toResolve = new DefaultArtifact(groupId, artifactId, version, null, type, null, null);
+		ArtifactHandler artifactHandler = artifactHandlerManager.getArtifactHandler(type);
+		if (artifactHandler == null) {
+			throw new MojoExecutionException("No artifact handler registered for type '" + type + "'");
+		}
+		Artifact toResolve = new DefaultArtifact(groupId, artifactId, version, null, type, null, artifactHandler);
 		try {
 			return artifactResolver.resolveArtifact(session.getProjectBuildingRequest(), toResolve);
 		}
