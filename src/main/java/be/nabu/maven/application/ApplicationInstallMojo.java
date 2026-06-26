@@ -28,6 +28,7 @@ import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.model.Dependency;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.shared.transfer.artifact.resolve.ArtifactResolver;
 import org.apache.maven.shared.transfer.artifact.resolve.ArtifactResolverException;
@@ -114,7 +115,7 @@ public class ApplicationInstallMojo extends AbstractMojo {
 		String groupId = parts[0];
 		String artifactId = parts[1];
 		String type = parts[2];
-		String version = parts.length == 4 ? parts[3] : null;
+		String version = parts.length == 4 ? parts[3] : findManagedVersion(groupId, artifactId, type);
 		Artifact toResolve = new DefaultArtifact(groupId, artifactId, version, null, type, null, null);
 		try {
 			return artifactResolver.resolveArtifact(session.getProjectBuildingRequest(), toResolve);
@@ -122,6 +123,23 @@ public class ApplicationInstallMojo extends AbstractMojo {
 		catch (ArtifactResolverException exc) {
 			throw new MojoExecutionException("Could not resolve application artifact " + coordinates, exc);
 		}
+	}
+
+	private String findManagedVersion(String groupId, String artifactId, String type) throws MojoExecutionException {
+		if (project == null || project.getDependencyManagement() == null || project.getDependencyManagement().getDependencies() == null) {
+			throw new MojoExecutionException("No dependencyManagement available to resolve application artifact version for " + groupId + ":" + artifactId);
+		}
+		for (Dependency dependency : project.getDependencyManagement().getDependencies()) {
+			if (groupId.equals(dependency.getGroupId())
+				&& artifactId.equals(dependency.getArtifactId())
+				&& type.equals(Objects.toString(dependency.getType(), "jar"))) {
+				String version = dependency.getVersion();
+				if (version != null && !version.trim().isEmpty()) {
+					return version.trim();
+				}
+			}
+		}
+		throw new MojoExecutionException("No managed version found for application artifact " + groupId + ":" + artifactId + ":" + type);
 	}
 
 	private void unzip(Path zipFile, Path target) throws MojoExecutionException {
